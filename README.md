@@ -55,4 +55,5 @@ queries.sql: A list of 8 helpful "questions" the database can answer.
 
 generate.py: Script to generate "seed_data.sql".
 
+ERD_Diagram.png: An image of the database map.
 
