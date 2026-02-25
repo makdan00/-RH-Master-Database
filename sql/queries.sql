@@ -56,3 +56,9 @@ FROM users u
 LEFT JOIN evaluations e ON u.id = e.judge_id
 WHERE u.role = 'judge'
 GROUP BY u.full_name;
+
+-- 9. LEADERBOARD
+-- Show the top 10 leaders
+SELECT * 
+FROM leaderboard 
+LIMIT 10;
