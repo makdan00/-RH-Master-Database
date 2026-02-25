@@ -33,15 +33,17 @@ Show me the last 10 things that happened in the database.
 SQL
 SELECT * FROM audit_logs ORDER BY changed_at DESC LIMIT 10;
 ## How to Connect
-Judges: You can connect to this database live using the following credentials:
+You can connect to this database live using the following credentials:
 
-Host: 
+Host: db.xudlymteuuwmaqijmdqe.supabase.co
 
-Port: 
+Port: 5432
 
-User: makdan
+User: postgres
 
-Password: 
+Database: postgres
+
+Password: [shared privately]
 
 Database: rh_master_db
 ## What's in this GitHub?
