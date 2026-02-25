@@ -1,23 +1,58 @@
--- Query 1: Get all participants
-SELECT * FROM users WHERE role = 'participant';
+-- 1. PARTICIPANT REGISTRATION & PROFILES
+-- Gets all participants along with their tech stack and bio
+SELECT u.full_name, u.email, p.tech_stack, p.github_handle 
+FROM users u 
+JOIN profiles p ON u.id = p.user_id 
+WHERE u.role = 'participant';
 
--- Query 2: Find submissions waiting for a grade
-SELECT * FROM submissions WHERE status = 'pending';
+-- 2. SUBMISSION TRACKING
+-- Shows all submissions that are waiting to be graded
+SELECT s.submitted_at, u.full_name, c.title, s.repo_url 
+FROM submissions s
+JOIN users u ON s.participant_id = u.id
+JOIN challenges c ON s.challenge_id = c.id
+WHERE s.status = 'pending';
 
--- Query 3: Show the Top 10 Leaders
-SELECT * FROM leaderboard LIMIT 10;
+-- 3. JUDGE SCORING
+-- Shows a list of scores given by a specific judge
+SELECT u.full_name AS judge_name, e.score, e.feedback 
+FROM evaluations e
+JOIN users u ON e.judge_id = u.id;
 
--- Query 4: Show Judge workloads
-SELECT judge_id, COUNT(*) FROM evaluations GROUP BY judge_id;
+-- 4. STAGE PROGRESSION
+-- Identifies participants who scored > 80 to move to the next stage
+SELECT u.full_name, AVG(e.score) as avg_score
+FROM users u
+JOIN submissions s ON u.id = s.participant_id
+JOIN evaluations e ON s.id = e.submission_id
+GROUP BY u.full_name
+HAVING AVG(e.score) >= 80;
 
--- Query 5: Find late submissions
-SELECT s.* FROM submissions s JOIN challenges c ON s.challenge_id = c.id WHERE s.submitted_at > c.due_date;
+-- 5. REPORTS & ANALYTICS
+-- Shows which tech stacks are most popular among participants
+SELECT unnest(tech_stack) AS skill, COUNT(*) 
+FROM profiles 
+GROUP BY skill 
+ORDER BY COUNT(*) DESC;
 
--- Query 6: Audit Check (Last 10 actions)
-SELECT * FROM audit_logs ORDER BY changed_at DESC LIMIT 10;
+-- 6. AUDIT LOGS
+-- Shows the most recent 10 administrative actions for security
+SELECT * FROM audit_logs 
+ORDER BY changed_at DESC 
+LIMIT 10;
 
--- Query 7: Participants by Tech Stack
-SELECT unnest(tech_stack), count(*) FROM profiles GROUP BY 1;
+-- 7. DEADLINE CHECK
+-- Lists participants who submitted after the challenge due date
+SELECT u.full_name, s.submitted_at, c.due_date
+FROM submissions s
+JOIN users u ON s.participant_id = u.id
+JOIN challenges c ON s.challenge_id = c.id
+WHERE s.submitted_at > c.due_date;
 
--- Query 8: Full history of one student
-SELECT * FROM submissions WHERE participant_id = 'INSERT_ID_HERE';
+-- 8. JUDGE WORKLOAD
+-- Counts how many evaluations each judge has completed
+SELECT u.full_name, COUNT(e.id) as reviews_done
+FROM users u
+LEFT JOIN evaluations e ON u.id = e.judge_id
+WHERE u.role = 'judge'
+GROUP BY u.full_name;
