@@ -57,3 +57,5 @@ generate.py: Script to generate "seed_data.sql".
 
 ERD_Diagram.png: An image of the database map.
 
+Project_Description.pdf: A short project description.
+
