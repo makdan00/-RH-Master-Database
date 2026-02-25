@@ -51,4 +51,6 @@ seed_data.sql: 300+ rows of realistic data so the database isn't empty.
 
 queries.sql: A list of 8 helpful "questions" the database can answer.
 
+generate.py: Script to generate "seed_data.sql".
+
 
