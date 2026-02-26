@@ -1,72 +1,116 @@
--- 1. Users Table (The Master List)
+-- ==========================================
+-- 1. TABLES & CONSTRAINTS
+-- ==========================================
+
+-- Users Table
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    role TEXT CHECK (role IN ('admin', 'judge', 'participant')),
+    role TEXT CHECK (role IN ('admin', 'judge', 'participant')) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Participant Profiles (The Bio/GitHub Info)
-CREATE TABLE profiles (
-    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    github_handle TEXT,
-    tech_stack TEXT[],
-    bio TEXT
-);
-
--- 3. Stages Table (The Competition Phases)
+-- Stages Table
 CREATE TABLE stages (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
-    start_date DATE,
-    end_date DATE
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Challenges Table (The Homework Tasks)
+-- Challenges Table
 CREATE TABLE challenges (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     stage_id INTEGER REFERENCES stages(id),
     title TEXT NOT NULL,
-    due_date TIMESTAMPTZ
+    description TEXT,
+    due_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. Submissions Table (What Students Turn In)
+-- Submissions Table
 CREATE TABLE submissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    participant_id UUID REFERENCES users(id),
-    challenge_id INTEGER REFERENCES challenges(id),
+    participant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    challenge_id UUID REFERENCES challenges(id) ON DELETE CASCADE,
     repo_url TEXT NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'under_review', 'completed')),
+    status TEXT CHECK (status IN ('pending', 'completed', 'reviewed')) DEFAULT 'pending',
     submitted_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 6. Evaluations Table (The Grades)
+-- Evaluations Table
 CREATE TABLE evaluations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     submission_id UUID REFERENCES submissions(id) ON DELETE CASCADE,
     judge_id UUID REFERENCES users(id),
     score INTEGER CHECK (score >= 0 AND score <= 100),
     feedback TEXT,
-    evaluated_at TIMESTAMPTZ DEFAULT now()
+    graded_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 7. Audit Logs (The Security Camera)
+-- Audit Logs Table
 CREATE TABLE audit_logs (
     id SERIAL PRIMARY KEY,
-    action TEXT NOT NULL,
     table_name TEXT,
-    actor_id UUID REFERENCES users(id),
+    action TEXT,
+    actor_id UUID,
     changed_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 8. Leaderboard (The Smart Ranker)
-CREATE OR REPLACE VIEW leaderboard AS
+-- ==========================================
+-- 2. SECURITY HARDENED FUNCTIONS & TRIGGERS
+-- ==========================================
+
+-- Function to log actions (Security Hardened with search_path)
+CREATE OR REPLACE FUNCTION log_action()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO audit_logs (action, table_name, actor_id)
+  VALUES (TG_OP, TG_TABLE_NAME, (SELECT id FROM users WHERE role = 'judge' LIMIT 1));
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SET search_path = public;
+
+-- Attach Triggers
+CREATE TRIGGER trg_audit_users
+AFTER INSERT OR UPDATE OR DELETE ON users
+FOR EACH ROW EXECUTE FUNCTION log_action();
+
+CREATE TRIGGER trg_audit_submissions
+AFTER INSERT OR UPDATE OR DELETE ON submissions
+FOR EACH ROW EXECUTE FUNCTION log_action();
+
+-- ==========================================
+-- 3. SECURE VIEWS (Leaderboard)
+-- ==========================================
+
+CREATE VIEW leaderboard 
+WITH (security_invoker = true) AS
 SELECT 
-    u.full_name,
-    AVG(e.score) as average_score
-FROM users u
-JOIN submissions s ON u.id = s.participant_id
+    p.full_name,
+    SUM(e.score) as total_score,
+    RANK() OVER (ORDER BY SUM(e.score) DESC) as rank
+FROM users p
+JOIN submissions s ON p.id = s.participant_id
 JOIN evaluations e ON s.id = e.submission_id
-GROUP BY u.full_name
-ORDER BY average_score DESC;
+GROUP BY p.full_name;
+
+-- ==========================================
+-- 4. ROW LEVEL SECURITY (RLS) POLICIES
+-- ==========================================
+
+-- Enable RLS on all base tables
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create Public Read Policies
+CREATE POLICY "Public Read" ON users FOR SELECT USING (true);
+CREATE POLICY "Public Read" ON stages FOR SELECT USING (true);
+CREATE POLICY "Public Read" ON challenges FOR SELECT USING (true);
+CREATE POLICY "Public Read" ON submissions FOR SELECT USING (true);
+CREATE POLICY "Public Read" ON evaluations FOR SELECT USING (true);
+CREATE POLICY "Public Read" ON audit_logs FOR SELECT USING (true);
